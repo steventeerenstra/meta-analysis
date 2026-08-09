@@ -1,0 +1,35 @@
+libname dir ".";
+
+data practice; 
+   set dir.meta20; 
+   if study=16 and G=.955 THEN study=17; 
+run;
+* creating dataset of residual variances to hold constant;
+* covariance parameters start values need to start at 2 instead of 1;
+data resvar0; set practice;
+	covp = study+1; 
+	keep covp varofd; run;
+* transposing to multivariate;
+proc transpose data=resvar0 out=resvar1;
+  id covp; 
+  idlabel covp; 
+  var varofd; 
+run;
+* renaming transposed variables to use in PARMS statement;
+* adding in start value for intercept variance as covp1;
+data resvar; retain covp1; 
+	set resvar1; drop _name_;
+	array old(20) _2-_21;
+	array new(20) covp2-covp21;
+	do i=1 to 20; new[i]=old[i]; end; 
+	drop _2--_21 i; 
+	covp1=1; 
+run;
+
+proc mixed data=practice  method=reml;
+	class study;			        * study is categorical variable;
+	model d =  / solution ddfm=bw;		* empty model for effect size;
+	random intercept / subject=study;	* allowing heterogeneity in d;		
+	repeated / group=study type=vc;		* separate residual variance per study;
+	parms / parmsdata=resvar hold=2 to 21;  * hold residual variances at known values;
+run;
